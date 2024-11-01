@@ -168,6 +168,12 @@ class Room {
 const rooms = new Map();
 
 wss.on("connection", async (ws, req) => {
+  console.log("WebSocket connection attempt:", {
+    ip: req.headers["x-real-ip"] || req.socket.remoteAddress,
+    url: req.url,
+    headers: req.headers,
+  });
+
   const query = url.parse(req.url, true).query;
   const roomId = query.roomId;
   const userId = query.userId;
