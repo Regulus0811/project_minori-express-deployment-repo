@@ -62,14 +62,11 @@ const config = {
             process.env.NODE_ENV === "production"
               ? "0.0.0.0" // 프로덕션 환경에서는 모든 인터페이스에서 수신
               : "127.0.0.1", // 개발 환경
-          announcedIp:
-            process.env.NODE_ENV === "production"
-              ? process.env.AWS_PUBLIC_IP // AWS 인스턴스의 공인 IP
-              : null,
+          announcedIp: "3.39.137.182",
         },
       ],
-      initialAvailableOutgoingBitrate: 1000000,
-      minimumAvailableOutgoingBitrate: 600000,
+      initialAvailableOutgoingBitrate: 600000,
+      minimumAvailableOutgoingBitrate: 300000,
       maxSctpMessageSize: 262144,
       maxIncomingBitrate: 1500000,
       // 추가 보안 설정
