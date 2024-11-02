@@ -28,7 +28,7 @@ const config = {
     worker: {
       rtcMinPort: 10000,
       rtcMaxPort: 10100,
-      logLevel: "warn",
+      logLevel: "debug",
       logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
     },
     router: {
@@ -62,10 +62,7 @@ const config = {
     webRtcTransport: {
       listenIps: [
         {
-          ip:
-            process.env.NODE_ENV === "production"
-              ? "0.0.0.0" // 프로덕션 환경에서는 모든 인터페이스에서 수신
-              : "127.0.0.1", // 개발 환경
+          ip: "0.0.0.0",
           announcedIp: "3.39.137.182",
         },
       ],
@@ -117,55 +114,69 @@ class Room {
   }
 
   async init() {
-    // 워커가 없으면 생성
-    if (workers.size === 0) {
-      const worker = await mediasoup.createWorker(config.mediasoup.worker);
-      workers.set(this.roomId, worker);
+    try {
+      if (workers.size === 0) {
+        const worker = await mediasoup.createWorker(config.mediasoup.worker);
+        workers.set(this.roomId, worker);
 
-      worker.on("died", () => {
-        console.error(
-          "mediasoup worker died, exiting in 2 seconds... [pid:%d]",
-          worker.pid
-        );
-        setTimeout(() => process.exit(1), 2000);
+        worker.on("died", () => {
+          console.error(
+            "MediaSoup worker died, exiting in 2 seconds... [pid:%d]",
+            worker.pid
+          );
+          setTimeout(() => process.exit(1), 2000);
+        });
+
+        console.log("Created new MediaSoup worker");
+      }
+
+      const worker = workers.get(this.roomId);
+      this.router = await worker.createRouter({
+        mediaCodecs: config.mediasoup.router.mediaCodecs,
       });
-    }
+      routers.set(this.roomId, this.router);
 
-    const worker = workers.get(this.roomId);
-    this.router = await worker.createRouter({
-      mediaCodecs: config.mediasoup.router.mediaCodecs,
-    });
-    routers.set(this.roomId, this.router);
+      console.log(`Initialized room: ${this.roomId}`);
+      return true;
+    } catch (error) {
+      console.error("Room initialization failed:", error);
+      return false;
+    }
   }
 
   async createWebRtcTransport(participantId) {
-    const transport = await this.router.createWebRtcTransport({
-      ...config.mediasoup.webRtcTransport,
-    });
+    try {
+      const transport = await this.router.createWebRtcTransport({
+        ...config.mediasoup.webRtcTransport,
+      });
 
-    // DTLS 상태 변경 모니터링
-    transport.on("dtlsstatechange", (dtlsState) => {
-      if (dtlsState === "closed" || dtlsState === "failed") {
+      console.log(`Created WebRTC transport for participant: ${participantId}`);
+
+      transport.on("dtlsstatechange", (dtlsState) => {
         console.log("Transport dtls state changed to", dtlsState);
-        transport.close();
-      }
-    });
+        if (dtlsState === "closed" || dtlsState === "failed") {
+          transport.close();
+        }
+      });
 
-    // ICE 상태 변경 모니터링
-    transport.on("icestatechange", (iceState) => {
-      console.log("Transport ice state changed to", iceState);
-    });
+      transport.on("icestatechange", (iceState) => {
+        console.log("Transport ice state changed to", iceState);
+      });
 
-    return {
-      transport,
-      params: {
-        id: transport.id,
-        iceParameters: transport.iceParameters,
-        iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters,
-        sctpParameters: transport.sctpParameters,
-      },
-    };
+      return {
+        transport,
+        params: {
+          id: transport.id,
+          iceParameters: transport.iceParameters,
+          iceCandidates: transport.iceCandidates,
+          dtlsParameters: transport.dtlsParameters,
+          sctpParameters: transport.sctpParameters,
+        },
+      };
+    } catch (error) {
+      console.error("Failed to create WebRTC transport:", error);
+      throw error;
+    }
   }
 }
 
@@ -177,212 +188,239 @@ wss.on("connection", async (ws, req) => {
     req.headers["x-forwarded-for"] ||
     req.socket.remoteAddress;
   const protocol = req.headers["x-forwarded-proto"] || "http";
-
-  console.log("New WebSocket connection:", {
-    ip,
-    url: req.url,
-    protocol,
-    headers: req.headers,
-    time: new Date().toISOString(),
-  });
-
-  if (protocol !== "https" && process.env.NODE_ENV === "production") {
-    console.warn("Rejecting non-HTTPS WebSocket connection");
-    return ws.close(1015, "TLS Required");
-  }
-
   const query = url.parse(req.url, true).query;
   const roomId = query.roomId;
   const userId = query.userId;
+
+  console.log("New WebSocket connection:", {
+    ip,
+    protocol,
+    roomId,
+    userId,
+    headers: req.headers,
+    time: new Date().toISOString(),
+  });
 
   ws.isAlive = true;
   ws.userId = userId;
   ws.on("pong", heartbeat);
   connections.set(userId, ws);
 
-  if (!rooms.has(roomId)) {
-    const room = new Room(roomId);
-    await room.init();
-    rooms.set(roomId, room);
-  }
+  try {
+    if (!rooms.has(roomId)) {
+      const room = new Room(roomId);
+      const initialized = await room.init();
+      if (!initialized) {
+        throw new Error("Failed to initialize room");
+      }
+      rooms.set(roomId, room);
+      console.log(`Created new room: ${roomId}`);
+    }
 
-  const room = rooms.get(roomId);
-  let producerTransport;
-  let consumerTransport;
+    const room = rooms.get(roomId);
+    let producerTransport;
+    let consumerTransport;
 
-  ws.on("message", async (message) => {
-    try {
-      const { event, data } = JSON.parse(message);
+    // 연결 성공 알림
+    ws.send(
+      JSON.stringify({
+        event: "connected",
+        data: {
+          userId,
+          roomId,
+          timestamp: Date.now(),
+        },
+      })
+    );
 
-      switch (event) {
-        case "getRouterRtpCapabilities": {
-          ws.send(
-            JSON.stringify({
-              event: "routerRtpCapabilities",
-              data: room.router.rtpCapabilities,
-            })
-          );
-          break;
-        }
+    ws.on("message", async (message) => {
+      try {
+        const { event, data } = JSON.parse(message);
+        console.log(`Received ${event} from user ${userId}`);
 
-        case "createProducerTransport": {
-          const { transport, params } =
-            await room.createWebRtcTransport(userId);
-          producerTransport = transport;
-          ws.send(
-            JSON.stringify({
-              event: "producerTransportCreated",
-              data: params,
-            })
-          );
-          break;
-        }
-
-        case "createConsumerTransport": {
-          const { transport, params } =
-            await room.createWebRtcTransport(userId);
-          consumerTransport = transport;
-          ws.send(
-            JSON.stringify({
-              event: "consumerTransportCreated",
-              data: params,
-            })
-          );
-          break;
-        }
-
-        case "connectProducerTransport": {
-          await producerTransport.connect({
-            dtlsParameters: data.dtlsParameters,
-          });
-          break;
-        }
-
-        case "connectConsumerTransport": {
-          await consumerTransport.connect({
-            dtlsParameters: data.dtlsParameters,
-          });
-          break;
-        }
-
-        case "produce": {
-          const producer = await producerTransport.produce({
-            kind: data.kind,
-            rtpParameters: data.rtpParameters,
-          });
-
-          room.producers.set(producer.id, producer);
-
-          producer.on("transportclose", () => {
-            producer.close();
-            room.producers.delete(producer.id);
-          });
-
-          ws.send(
-            JSON.stringify({
-              event: "produced",
-              data: { id: producer.id },
-            })
-          );
-          break;
-        }
-
-        case "consume": {
-          const producer = room.producers.get(data.producerId);
-          if (!producer) {
+        switch (event) {
+          case "getRouterRtpCapabilities": {
             ws.send(
               JSON.stringify({
-                event: "error",
-                data: "producer not found",
+                event: "routerRtpCapabilities",
+                data: room.router.rtpCapabilities,
               })
             );
             break;
           }
 
-          const consumer = await consumerTransport.consume({
-            producerId: data.producerId,
-            rtpCapabilities: data.rtpCapabilities,
-            paused: true,
-          });
-
-          room.consumers.set(consumer.id, consumer);
-
-          consumer.on("transportclose", () => {
-            consumer.close();
-            room.consumers.delete(consumer.id);
-          });
-
-          ws.send(
-            JSON.stringify({
-              event: "consumed",
-              data: {
-                id: consumer.id,
-                producerId: producer.id,
-                kind: consumer.kind,
-                rtpParameters: consumer.rtpParameters,
-              },
-            })
-          );
-          break;
-        }
-
-        case "resumeConsumer": {
-          const consumer = room.consumers.get(data.consumerId);
-          if (consumer) {
-            await consumer.resume();
+          case "createProducerTransport": {
+            const { transport, params } =
+              await room.createWebRtcTransport(userId);
+            producerTransport = transport;
+            ws.send(
+              JSON.stringify({
+                event: "producerTransportCreated",
+                data: params,
+              })
+            );
+            break;
           }
-          break;
+
+          case "createConsumerTransport": {
+            const { transport, params } =
+              await room.createWebRtcTransport(userId);
+            consumerTransport = transport;
+            ws.send(
+              JSON.stringify({
+                event: "consumerTransportCreated",
+                data: params,
+              })
+            );
+            break;
+          }
+
+          case "connectProducerTransport": {
+            await producerTransport.connect({
+              dtlsParameters: data.dtlsParameters,
+            });
+            break;
+          }
+
+          case "connectConsumerTransport": {
+            await consumerTransport.connect({
+              dtlsParameters: data.dtlsParameters,
+            });
+            break;
+          }
+
+          case "produce": {
+            const producer = await producerTransport.produce({
+              kind: data.kind,
+              rtpParameters: data.rtpParameters,
+            });
+
+            room.producers.set(producer.id, producer);
+            console.log(`New producer created: ${producer.id}`);
+
+            producer.on("transportclose", () => {
+              console.log(`Producer transport closed: ${producer.id}`);
+              producer.close();
+              room.producers.delete(producer.id);
+            });
+
+            ws.send(
+              JSON.stringify({
+                event: "produced",
+                data: { id: producer.id },
+              })
+            );
+            break;
+          }
+
+          case "consume": {
+            const producer = room.producers.get(data.producerId);
+            if (!producer) {
+              console.log(`Producer not found: ${data.producerId}`);
+              ws.send(
+                JSON.stringify({
+                  event: "error",
+                  data: "producer not found",
+                })
+              );
+              break;
+            }
+
+            const consumer = await consumerTransport.consume({
+              producerId: data.producerId,
+              rtpCapabilities: data.rtpCapabilities,
+              paused: true,
+            });
+
+            room.consumers.set(consumer.id, consumer);
+            console.log(`New consumer created: ${consumer.id}`);
+
+            consumer.on("transportclose", () => {
+              console.log(`Consumer transport closed: ${consumer.id}`);
+              consumer.close();
+              room.consumers.delete(consumer.id);
+            });
+
+            ws.send(
+              JSON.stringify({
+                event: "consumed",
+                data: {
+                  id: consumer.id,
+                  producerId: producer.id,
+                  kind: consumer.kind,
+                  rtpParameters: consumer.rtpParameters,
+                },
+              })
+            );
+            break;
+          }
+
+          case "resumeConsumer": {
+            const consumer = room.consumers.get(data.consumerId);
+            if (consumer) {
+              await consumer.resume();
+              console.log(`Consumer resumed: ${data.consumerId}`);
+            }
+            break;
+          }
         }
+      } catch (error) {
+        console.error("Message handling error:", error);
+        ws.send(
+          JSON.stringify({
+            event: "error",
+            data: {
+              message: error.message,
+              code: error.code,
+            },
+          })
+        );
       }
-    } catch (error) {
-      console.error("Message handling error:", error);
+    });
+
+    ws.on("error", (error) => {
+      console.error(`WebSocket error for user ${userId}:`, error);
       ws.send(
         JSON.stringify({
           event: "error",
-          data: error.message,
+          data: {
+            message: "WebSocket error occurred",
+            code: error.code,
+          },
         })
       );
-    }
-  });
+    });
 
-  ws.on("error", (error) => {
-    console.error(`WebSocket error for user ${userId}:`, error);
-    // 클라이언트에게 에러 알림
-    ws.send(
-      JSON.stringify({
-        event: "error",
-        data: {
-          message: "WebSocket error occurred",
-          code: error.code,
-        },
-      })
-    );
-  });
+    ws.on("close", () => {
+      console.log(`Client disconnected: ${userId} from room ${roomId}`);
+      connections.delete(userId);
 
-  ws.on("close", () => {
-    connections.delete(userId);
-    if (producerTransport) {
-      producerTransport.close();
-    }
-    if (consumerTransport) {
-      consumerTransport.close();
-    }
-
-    const room = rooms.get(roomId);
-    if (room?.participants.size === 0) {
-      const worker = workers.get(roomId);
-      if (worker) {
-        worker.close();
-        workers.delete(roomId);
+      if (producerTransport) {
+        producerTransport.close();
       }
-      rooms.delete(roomId);
-    }
-  });
+      if (consumerTransport) {
+        consumerTransport.close();
+      }
+
+      if (room?.participants.size === 0) {
+        const worker = workers.get(roomId);
+        if (worker) {
+          worker.close();
+          workers.delete(roomId);
+        }
+        rooms.delete(roomId);
+        console.log(`Room ${roomId} deleted`);
+      }
+    });
+  } catch (error) {
+    console.error("Connection setup error:", error);
+    ws.close(1011, "Server setup error");
+  }
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(8080, () => {
-  console.log(`Mediasoup Server is listening on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`MediaSoup Server is listening on port ${PORT}`);
 });
 
 process.on("SIGTERM", () => {
