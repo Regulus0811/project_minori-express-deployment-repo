@@ -5,14 +5,18 @@ const WebSocket = require("ws");
 const url = require("url");
 
 const app = express();
+
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 const server = http.createServer(app);
 const wss = new WebSocket.Server({
   server,
-  // WebSocket 서버 추가 설정
   clientTracking: true,
-  // ping/pong으로 연결 상태 모니터링
-  pingInterval: 30000,
+  pingInterval: 10000,
   pingTimeout: 5000,
+  perMessageDeflate: false, // 성능 향상을 위해 비활성화
 });
 
 // Mediasoup 워커와 라우터를 저장할 맵
@@ -168,10 +172,16 @@ class Room {
 const rooms = new Map();
 
 wss.on("connection", async (ws, req) => {
-  console.log("WebSocket connection attempt:", {
-    ip: req.headers["x-real-ip"] || req.socket.remoteAddress,
+  const ip =
+    req.headers["x-real-ip"] ||
+    req.headers["x-forwarded-for"] ||
+    req.socket.remoteAddress;
+
+  console.log("New WebSocket connection:", {
+    ip,
     url: req.url,
     headers: req.headers,
+    time: new Date().toISOString(),
   });
 
   const query = url.parse(req.url, true).query;
