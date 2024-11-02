@@ -176,13 +176,20 @@ wss.on("connection", async (ws, req) => {
     req.headers["x-real-ip"] ||
     req.headers["x-forwarded-for"] ||
     req.socket.remoteAddress;
+  const protocol = req.headers["x-forwarded-proto"] || "http";
 
   console.log("New WebSocket connection:", {
     ip,
     url: req.url,
+    protocol,
     headers: req.headers,
     time: new Date().toISOString(),
   });
+
+  if (protocol !== "https" && process.env.NODE_ENV === "production") {
+    console.warn("Rejecting non-HTTPS WebSocket connection");
+    return ws.close(1015, "TLS Required");
+  }
 
   const query = url.parse(req.url, true).query;
   const roomId = query.roomId;
