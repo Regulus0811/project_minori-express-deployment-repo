@@ -5,6 +5,7 @@ const mediasoup = require("mediasoup");
 const fs = require("fs");
 const https = require("https");
 const socketIo = require("socket.io");
+const path = require("path");
 
 const PORT = process.env.PORT || 8000;
 const options = {
