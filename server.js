@@ -7,12 +7,12 @@ const fs = require("fs");
 const PORT = 8000;
 const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
-  path: "/mediasoup/socket.io", // Nginx location path와 맞춤
+  path: "/mediasoup/socket.io",
   cors: {
     origin: [
       "https://minoriedu.com",
-      "http://127.0.0.1:3000",
-      "http://127.0.0.1:3001",
+      "https://127.0.0.1:3000",
+      "https://127.0.0.1:3001",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
@@ -21,6 +21,10 @@ const io = require("socket.io")(server, {
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
+  transports: ["websocket", "polling"],
+  upgradeTimeout: 30000,
+  allowUpgrades: true,
+  cookie: false,
 });
 const corsOptions = {
   origin: "*",
@@ -408,7 +412,7 @@ const createWebRtcTransport = async (router) => {
         listenIps: [
           {
             ip: "0.0.0.0", // replace with relevant IP address
-            announcedIp: "minoriedu.com",
+            announcedIp: "3.39.137.182",
           },
         ],
         enableUdp: true,
