@@ -2,11 +2,15 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mediasoup = require("mediasoup");
-const http = require("http");
+const https = require("https");
 const socketIo = require("socket.io");
 
 const PORT = process.env.PORT || 8000;
-const server = http.createServer(app);
+const options = {
+  key: fs.readFileSync("./config/ssl/key.pem", "utf-8"),
+  cert: fs.readFileSync("./config/ssl/crt.pem", "utf-8"),
+};
+const server = https.createServer(options, app);
 const io = socketIo(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || "*",
