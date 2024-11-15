@@ -5,17 +5,20 @@ const mediasoup = require("mediasoup");
 const fs = require("fs");
 
 const PORT = 8000;
-const option = {
-  key: fs.readFileSync("./config/ssl/key.pem", "utf-8"),
-  cert: fs.readFileSync("./config/ssl/crt.pem", "utf-8"),
-};
-const server = require("https").createServer(option, app);
+const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "https://minoriedu.com",
+      "http://minoriedu.com",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
+    transports: ["websocket", "polling"],
   },
+  allowEIO3: true,
 });
 const corsOptions = {
   origin: "*",
@@ -402,8 +405,8 @@ const createWebRtcTransport = async (router) => {
       const webRtcTransport_options = {
         listenIps: [
           {
-            ip: "3.39.137.182", // replace with relevant IP address
-            // announcedIp: "10.0.0.115",
+            ip: "0.0.0.0", // replace with relevant IP address
+            announcedIp: "minoriedu.com",
           },
         ],
         enableUdp: true,
