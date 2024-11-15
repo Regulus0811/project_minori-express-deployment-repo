@@ -1,30 +1,36 @@
-# 1. Use the official Node.js image as the base image with Node.js version 18
+# Use the official Node.js image as the base image with Node.js version 18
 FROM node:18
 
-# 2. Set the working directory inside the container
+# Set the working directory inside the container
 WORKDIR /app
 
-# 3. Copy the package.json and package-lock.json files to the working directory
-COPY package*.json ./
+# Install required dependencies for mediasoup
+RUN apt-get update && \
+    apt-get install -y \
+    python3 \
+    python3-pip \
+    build-essential \
+    python3-dev \
+    pkg-config
 
-# 4. Install Python and pip
-RUN apt-get update && apt-get install -y python3 python3-pip
-
-# 5. Create SSL directory
+# Create SSL directory
 RUN mkdir -p /app/config/ssl
 
-# 6. Install the dependencies specified in package.json
+# Copy package files
+COPY package*.json ./
+
+# Install Node.js dependencies
 RUN npm install
 
-# 7. Copy the rest of the application code to the working directory
+# Copy the rest of the application code
 COPY . .
 
-# 8. Expose ports
-# HTTPS port
-EXPOSE 443
-# WebRTC ports
+# Expose the main server port
+EXPOSE 8000
+
+# Expose WebRTC ports (as defined in createWorker)
 EXPOSE 2000-2020/udp
 EXPOSE 2000-2020/tcp
 
-# 9. Define the command to run the application
+# Start the server
 CMD ["node", "server.js"]
