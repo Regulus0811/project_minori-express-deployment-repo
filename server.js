@@ -414,6 +414,10 @@ const createWebRtcTransport = async (router) => {
         enableUdp: true,
         enableTcp: true,
         preferUdp: true,
+        initialAvailableOutgoingBitrate: 1000000,
+        minimumAvailableOutgoingBitrate: 600000,
+        maxSctpMessageSize: 262144,
+        maxIncomingBitrate: 1500000,
       };
 
       // https://mediasoup.org/documentation/v3/mediasoup/api/#router-createWebRtcTransport
