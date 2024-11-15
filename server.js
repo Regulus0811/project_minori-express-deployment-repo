@@ -7,18 +7,20 @@ const fs = require("fs");
 const PORT = 8000;
 const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
+  path: "/mediasoup/socket.io", // Nginx location path와 맞춤
   cors: {
     origin: [
       "https://minoriedu.com",
-      "http://minoriedu.com",
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001",
     ],
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
     transports: ["websocket", "polling"],
   },
   allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 const corsOptions = {
   origin: "*",
