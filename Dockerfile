@@ -10,14 +10,21 @@ COPY package*.json ./
 # 4. Install Python and pip
 RUN apt-get update && apt-get install -y python3 python3-pip
 
-# 5. Install the dependencies specified in package.json
+# 5. Create SSL directory
+RUN mkdir -p /app/config/ssl
+
+# 6. Install the dependencies specified in package.json
 RUN npm install
 
-# 6. Copy the rest of the application code to the working directory
+# 7. Copy the rest of the application code to the working directory
 COPY . .
 
-# 7. Expose the port the app runs on (adjust if your server runs on a different port)
-EXPOSE 8080
+# 8. Expose ports
+# HTTPS port
+EXPOSE 443
+# WebRTC ports
+EXPOSE 2000-2020/udp
+EXPOSE 2000-2020/tcp
 
-# 8. Define the command to run the application
+# 9. Define the command to run the application
 CMD ["node", "server.js"]
