@@ -83,7 +83,21 @@ const mediaCodecs = [
   },
 ];
 
+io.engine.on("connection_error", (err) => {
+  console.error("Connection error:", {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+  });
+});
+
 connections.on("connection", async (socket) => {
+  console.log("New WebSocket connection:", socket.id);
+
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
+  });
+
   const removeItems = (items, socketId, type) => {
     items.forEach((item) => {
       if (item.socketId === socket.id) {
@@ -96,6 +110,10 @@ connections.on("connection", async (socket) => {
   };
 
   socket.on("disconnect", () => {
+    console.log("Client disconnected:", {
+      id: socket.id,
+      reason,
+    });
     // user left room
     consumers = removeItems(consumers, socket.id, "consumer");
     producers = removeItems(producers, socket.id, "producer");
@@ -412,7 +430,7 @@ const createWebRtcTransport = async (router) => {
         listenIps: [
           {
             ip: "0.0.0.0", // replace with relevant IP address
-            announcedIp: "3.39.137.182",
+            announcedIp: "minoriedu.com",
           },
         ],
         enableUdp: true,
