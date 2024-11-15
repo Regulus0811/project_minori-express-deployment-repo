@@ -7,8 +7,14 @@ const socketIo = require("socket.io");
 
 const PORT = process.env.PORT || 8000;
 const options = {
-  key: fs.readFileSync("./config/ssl/key.pem", "utf-8"),
-  cert: fs.readFileSync("./config/ssl/crt.pem", "utf-8"),
+  key: fs.readFileSync(
+    process.env.SSL_KEY_PATH || "./config/ssl/key.pem",
+    "utf-8"
+  ),
+  cert: fs.readFileSync(
+    process.env.SSL_CERT_PATH || "./config/ssl/crt.pem",
+    "utf-8"
+  ),
 };
 const server = https.createServer(options, app);
 const io = socketIo(server, {
@@ -352,6 +358,7 @@ const createWebRtcTransport = async (router) => {
         listenIps: [
           {
             ip: process.env.LISTEN_IP || "127.0.0.1",
+            announcedIp: process.env.ANNOUNCED_IP,
           },
         ],
         enableUdp: true,
