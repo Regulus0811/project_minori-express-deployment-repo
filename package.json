@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
     "mediasoup": "^3.14.16",
     "socket.io": "^4.7.5",
     "ws": "^8.18.0"
