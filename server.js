@@ -20,6 +20,7 @@ const io = require("socket.io")(server, {
     credentials: true,
     transports: ["websocket", "polling"],
   },
+  // Socket.IO 설정 최적화
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -27,6 +28,31 @@ const io = require("socket.io")(server, {
   upgradeTimeout: 30000,
   allowUpgrades: true,
   cookie: false,
+  // 연결 안정성 향상을 위한 추가 설정
+  connectTimeout: 45000,
+  maxHttpBufferSize: 1e8,
+  perMessageDeflate: {
+    threshold: 1024,
+  },
+});
+
+// 에러 핸들링 강화
+io.engine.on("connection_error", (err) => {
+  console.error("Connection error:", {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 연결 모니터링
+io.engine.on("initial_headers", (headers, req) => {
+  console.log("Initial headers:", {
+    url: req.url,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Rate limiting 추가
@@ -525,32 +551,39 @@ const handleError = (error) => {
 };
 
 const cleanup = (socketId) => {
-  // Producers 정리
-  producers = removeItems(producers, socketId, "producer");
+  try {
+    console.log(`Cleaning up resources for socket ${socketId}`);
 
-  // Consumers 정리
-  consumers = removeItems(consumers, socketId, "consumer");
+    // Producers 정리
+    producers = removeItems(producers, socketId, "producer");
 
-  // Transports 정리
-  transports = removeItems(transports, socketId, "transport");
+    // Consumers 정리
+    consumers = removeItems(consumers, socketId, "consumer");
 
-  // Peer 정리
-  if (peers[socketId]) {
-    const { roomName } = peers[socketId];
-    delete peers[socketId];
+    // Transports 정리
+    transports = removeItems(transports, socketId, "transport");
 
-    // Room에서 제거
-    if (rooms[roomName]) {
-      rooms[roomName].peers = rooms[roomName].peers.filter(
-        (id) => id !== socketId
-      );
+    // Peer 정리
+    if (peers[socketId]) {
+      const { roomName } = peers[socketId];
+      delete peers[socketId];
 
-      // Room이 비었으면 제거
-      if (rooms[roomName].peers.length === 0) {
-        rooms[roomName].router.close();
-        delete rooms[roomName];
+      // Room에서 제거
+      if (rooms[roomName]) {
+        rooms[roomName].peers = rooms[roomName].peers.filter(
+          (id) => id !== socketId
+        );
+
+        // Room이 비었으면 제거
+        if (rooms[roomName].peers.length === 0) {
+          console.log(`Closing empty room: ${roomName}`);
+          rooms[roomName].router.close();
+          delete rooms[roomName];
+        }
       }
     }
+  } catch (error) {
+    console.error(`Error during cleanup for socket ${socketId}:`, error);
   }
 };
 
