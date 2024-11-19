@@ -51,9 +51,6 @@ const limiter = rateLimit({
   max: 100, // IP당 최대 요청 수
 });
 
-app.use(limiter);
-app.use(cors(corsOptions));
-
 // 헬스 체크 엔드포인트 추가
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
@@ -87,6 +84,9 @@ const corsOptions = {
 app.get("/", (req, res) => {
   res.send("hi");
 });
+
+app.use(limiter);
+app.use(cors(corsOptions));
 
 const connections = io.of("/mediasoup");
 let worker;
