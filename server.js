@@ -11,8 +11,10 @@ const io = require("socket.io")(server, {
   cors: {
     origin: [
       "https://minoriedu.com",
-      "https://127.0.0.1:3000",
-      "https://127.0.0.1:3001",
+      "https://www.minoriedu.com",
+      "minoriedu.com",
+      "http://minoriedu.com",
+      "http://www.minoriedu.com",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
@@ -26,23 +28,6 @@ const io = require("socket.io")(server, {
   allowUpgrades: true,
   cookie: false,
 });
-
-// 환경 변수 설정
-const config = {
-  port: process.env.PORT || 8000,
-  workers: {
-    rtcMinPort: 2000,
-    rtcMaxPort: 2020,
-    logLevel: process.env.LOG_LEVEL || "debug",
-    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-    dtlsCertificateFile: process.env.DTLS_CERT_FILE || "/config/ssl/crt.pem",
-    dtlsPrivateKeyFile: process.env.DTLS_KEY_FILE || "/config/ssl/key.pem",
-  },
-  webrtc: {
-    listenIp: process.env.LISTEN_IP || "0.0.0.0",
-    announcedIp: process.env.ANNOUNCED_IP || "3.39.137.182",
-  },
-};
 
 // Rate limiting 추가
 const rateLimit = require("express-rate-limit");
