@@ -26,12 +26,63 @@ const io = require("socket.io")(server, {
   allowUpgrades: true,
   cookie: false,
 });
+
+// 환경 변수 설정
+const config = {
+  port: process.env.PORT || 8000,
+  workers: {
+    rtcMinPort: 2000,
+    rtcMaxPort: 2020,
+    logLevel: process.env.LOG_LEVEL || "debug",
+    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+    dtlsCertificateFile: process.env.DTLS_CERT_FILE || "/config/ssl/crt.pem",
+    dtlsPrivateKeyFile: process.env.DTLS_KEY_FILE || "/config/ssl/key.pem",
+  },
+  webrtc: {
+    listenIp: process.env.LISTEN_IP || "0.0.0.0",
+    announcedIp: process.env.ANNOUNCED_IP || "3.39.137.182",
+  },
+};
+
+// Rate limiting 추가
+const rateLimit = require("express-rate-limit");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 100, // IP당 최대 요청 수
+});
+
+app.use(limiter);
+app.use(cors(corsOptions));
+
+// 헬스 체크 엔드포인트 추가
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Worker Pool 관리
+const WorkerPool = {
+  workers: [],
+  index: 0,
+
+  async init(numWorkers = require("os").cpus().length) {
+    for (let i = 0; i < numWorkers; i++) {
+      const worker = await createWorker();
+      this.workers.push(worker);
+    }
+    console.log(`Initialized ${numWorkers} workers`);
+  },
+
+  getWorker() {
+    const worker = this.workers[this.index];
+    this.index = (this.index + 1) % this.workers.length;
+    return worker;
+  },
+};
+
 const corsOptions = {
   origin: "*",
   credentials: true,
 };
-
-app.use(cors(corsOptions));
 
 app.get("/", (req, res) => {
   res.send("hi");
@@ -49,6 +100,14 @@ const createWorker = async () => {
   worker = await mediasoup.createWorker({
     rtcMinPort: 2000,
     rtcMaxPort: 2020,
+    // Log Settings
+    logLevel: "debug",
+    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+    // CPU Core Settings
+    workerSettings: {
+      dtlsCertificateFile: "/config/ssl/crt.pem",
+      dtlsPrivateKeyFile: "/config/ssl/key.pem",
+    },
   });
   console.log(`worker pid ${worker.pid}`);
 
@@ -430,7 +489,7 @@ const createWebRtcTransport = async (router) => {
         listenIps: [
           {
             ip: "0.0.0.0", // replace with relevant IP address
-            announcedIp: "minoriedu.com",
+            announcedIp: "3.39.137.182",
           },
         ],
         enableUdp: true,
@@ -440,6 +499,12 @@ const createWebRtcTransport = async (router) => {
         minimumAvailableOutgoingBitrate: 600000,
         maxSctpMessageSize: 262144,
         maxIncomingBitrate: 1500000,
+        // DTLS support
+        enableSctp: true,
+        numSctpStreams: {
+          OS: 1024,
+          MIS: 1024,
+        },
       };
 
       // https://mediasoup.org/documentation/v3/mediasoup/api/#router-createWebRtcTransport
@@ -449,8 +514,8 @@ const createWebRtcTransport = async (router) => {
       console.log(`transport id: ${transport.id}`);
 
       transport.on("dtlsstatechange", (dtlsState) => {
-        if (dtlsState === "closed") {
-          transport.close();
+        if (dtlsState === "failed" || dtlsState === "closed") {
+          console.error("DTLS state changed to", dtlsState);
         }
       });
 
@@ -464,6 +529,46 @@ const createWebRtcTransport = async (router) => {
     }
   });
 };
+
+const handleError = (error) => {
+  console.error("Error occurred:", error);
+  // 클라이언트에 에러 알림
+  socket.emit("error", {
+    type: "transport-error",
+    message: error.message,
+  });
+};
+
+const cleanup = (socketId) => {
+  // Producers 정리
+  producers = removeItems(producers, socketId, "producer");
+
+  // Consumers 정리
+  consumers = removeItems(consumers, socketId, "consumer");
+
+  // Transports 정리
+  transports = removeItems(transports, socketId, "transport");
+
+  // Peer 정리
+  if (peers[socketId]) {
+    const { roomName } = peers[socketId];
+    delete peers[socketId];
+
+    // Room에서 제거
+    if (rooms[roomName]) {
+      rooms[roomName].peers = rooms[roomName].peers.filter(
+        (id) => id !== socketId
+      );
+
+      // Room이 비었으면 제거
+      if (rooms[roomName].peers.length === 0) {
+        rooms[roomName].router.close();
+        delete rooms[roomName];
+      }
+    }
+  }
+};
+
 server.listen(PORT, () => {
   console.log("server is running on", PORT);
 });
