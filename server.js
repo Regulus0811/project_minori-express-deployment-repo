@@ -12,12 +12,17 @@ const io = require("socket.io")(server, {
     origin: "*",
     methods: ["GET", "POST"],
     allowedHeaders: ["*"],
+    credentials: true,
   },
   transports: ["websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 45000,
   allowEIO3: true,
+  maxHttpBufferSize: 1e8,
+  perMessageDeflate: {
+    threshold: 1024,
+  },
 });
 
 // 연결 디버깅을 위한 미들웨어 추가
@@ -66,9 +71,19 @@ io.engine.on("connection_error", (err) => {
 
 // 연결 모니터링
 io.engine.on("initial_headers", (headers, req) => {
-  console.log("Initial headers:", {
+  console.log("Socket.IO Initial headers:", {
     url: req.url,
     method: req.method,
+    headers: headers,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+io.engine.on("headers", (headers, req) => {
+  console.log("Socket.IO Headers:", {
+    url: req.url,
+    method: req.method,
+    headers: headers,
     timestamp: new Date().toISOString(),
   });
 });
