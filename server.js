@@ -7,7 +7,7 @@ const fs = require("fs");
 const PORT = 8000;
 const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
-  path: "/mediasoup/socket.io",
+  path: "/mediasoup",
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
@@ -17,6 +17,7 @@ const io = require("socket.io")(server, {
   transports: ["websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
+  connectTimeout: 45000,
 });
 
 // Rate limiting 추가
