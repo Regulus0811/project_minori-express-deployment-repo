@@ -12,12 +12,33 @@ const io = require("socket.io")(server, {
     origin: "*",
     methods: ["GET", "POST"],
     allowedHeaders: ["*"],
-    credentials: true,
   },
   transports: ["websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
   connectTimeout: 45000,
+  allowEIO3: true,
+});
+
+// 연결 디버깅을 위한 미들웨어 추가
+io.use((socket, next) => {
+  console.log("New connection attempt:", {
+    id: socket.id,
+    handshake: socket.handshake,
+    timestamp: new Date().toISOString(),
+  });
+  next();
+});
+
+// 에러 핸들링 강화
+io.engine.on("connection_error", (err) => {
+  console.error("Connection error:", {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+    timestamp: new Date().toISOString(),
+    stack: err.stack,
+  });
 });
 
 // Rate limiting 추가
@@ -39,6 +60,7 @@ io.engine.on("connection_error", (err) => {
     message: err.message,
     context: err.context,
     timestamp: new Date().toISOString(),
+    stack: err.stack,
   });
 });
 
