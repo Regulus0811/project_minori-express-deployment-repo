@@ -9,32 +9,27 @@ const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
   path: "/mediasoup/socket.io",
   cors: {
-    origin: [
-      "https://minoriedu.com",
-      "https://www.minoriedu.com",
-      "minoriedu.com",
-      "http://minoriedu.com",
-      "http://www.minoriedu.com",
-    ],
-    methods: ["GET", "POST", "OPTIONS"],
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["*"],
     credentials: true,
-    transports: ["websocket", "polling"],
   },
-  // Socket.IO 설정 최적화
-  allowEIO3: true,
+  transports: ["websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
-  transports: ["websocket", "polling"],
-  upgradeTimeout: 30000,
-  allowUpgrades: true,
-  cookie: false,
-  // 연결 안정성 향상을 위한 추가 설정
-  connectTimeout: 45000,
-  maxHttpBufferSize: 1e8,
-  perMessageDeflate: {
-    threshold: 1024,
-  },
 });
+
+// Rate limiting 추가
+const rateLimit = require("express-rate-limit");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 100, // IP당 최대 요청 수
+});
+
+app.use(limiter);
+app.use(cors());
+
+const connections = io.of("/mediasoup");
 
 // 에러 핸들링 강화
 io.engine.on("connection_error", (err) => {
@@ -53,13 +48,6 @@ io.engine.on("initial_headers", (headers, req) => {
     method: req.method,
     timestamp: new Date().toISOString(),
   });
-});
-
-// Rate limiting 추가
-const rateLimit = require("express-rate-limit");
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15분
-  max: 100, // IP당 최대 요청 수
 });
 
 // 헬스 체크 엔드포인트 추가
@@ -87,19 +75,10 @@ const WorkerPool = {
   },
 };
 
-const corsOptions = {
-  origin: "*",
-  credentials: true,
-};
-
 app.get("/", (req, res) => {
   res.send("hi");
 });
 
-app.use(limiter);
-app.use(cors(corsOptions));
-
-const connections = io.of("/mediasoup");
 let worker;
 let rooms = {}; // { roomName1: { Router, rooms: [ sicketId1, ... ] }, ...}
 let peers = {}; // { socketId1: { roomName1, socket, transports = [id1, id2,] }, producers = [id1, id2,] }, consumers = [id1, id2,], peerDetails }, ...}
@@ -589,4 +568,9 @@ const cleanup = (socketId) => {
 
 server.listen(PORT, () => {
   console.log("server is running on", PORT);
+});
+
+// 에러 핸들링 추가
+io.on("connect_error", (err) => {
+  console.error("Socket.IO connection error:", err);
 });
