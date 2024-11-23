@@ -10,14 +10,14 @@ const io = require("socket.io")(server, {
   path: "/mediasoup",
   cors: {
     origin: "*",
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["*"],
     credentials: true,
   },
   transports: ["websocket"],
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  connectTimeout: 45000,
+  pingTimeout: 30000,
+  pingInterval: 10000,
+  connectTimeout: 10000,
   allowEIO3: true,
   maxHttpBufferSize: 1e8,
   perMessageDeflate: {
@@ -84,6 +84,7 @@ io.engine.on("headers", (headers, req) => {
     url: req.url,
     method: req.method,
     headers: headers,
+    query: req.query,
     timestamp: new Date().toISOString(),
   });
 });
