@@ -19,7 +19,6 @@ const io = require("socket.io")(server, {
   connectTimeout: 30000,
   allowEIO3: true,
   maxHttpBufferSize: 1e8,
-  wsEngine: "ws",
   perMessageDeflate: {
     threshold: 1024,
     zlibInflateOptions: {
@@ -39,6 +38,7 @@ io.engine.on("connection_error", (err) => {
     context: err.context,
     headers: err.req?.headers,
     url: err.req?.url,
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -49,8 +49,8 @@ const createWorker = async () => {
     rtcMaxPort: 2020,
     logLevel: "debug",
     logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-    dtlsCertificateFile: "/config/ssl/crt.pem",
-    dtlsPrivateKeyFile: "/config/ssl/key.pem",
+    dtlsCertificateFile: process.env.DTLS_CERT_FILE || "/config/ssl/crt.pem",
+    dtlsPrivateKeyFile: process.env.DTLS_KEY_FILE || "/config/ssl/key.pem",
   });
 
   worker.on("died", (error) => {
