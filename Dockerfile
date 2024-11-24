@@ -1,20 +1,19 @@
 # Use the official Node.js image as the base image with Node.js version 18
-FROM node:18
+FROM node:18-slim
 
 # Set the working directory inside the container
 WORKDIR /app
 
 # Install required dependencies for mediasoup
 RUN apt-get update && \
-    apt-get install -y \
-    python3 \
-    python3-pip \
+    apt-get install -y --no-install-recommends \
+    python3-minimal \
     build-essential \
-    python3-dev \
     pkg-config \
     openssl && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /tmp/*
 
 # SSL 디렉토리 생성
 RUN mkdir -p /app/ssl
@@ -23,8 +22,8 @@ RUN mkdir -p /app/ssl
 COPY package*.json ./
 
 # Install Node.js dependencies
-RUN npm install --production && \
-    rm -rf /tmp/npm-cache
+RUN npm ci --only=production && \
+    npm cache clean --force
 
 # Copy the rest of the application code
 COPY . .
