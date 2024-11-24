@@ -44,21 +44,27 @@ io.engine.on("connection_error", (err) => {
 
 // mediasoup 워커 설정
 const createWorker = async () => {
-  worker = await mediasoup.createWorker({
-    rtcMinPort: 2000,
-    rtcMaxPort: 2020,
-    logLevel: "debug",
-    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-    dtlsCertificateFile: process.env.DTLS_CERT_FILE || "/config/ssl/crt.pem",
-    dtlsPrivateKeyFile: process.env.DTLS_KEY_FILE || "/config/ssl/key.pem",
-  });
+  try {
+    worker = await mediasoup.createWorker({
+      rtcMinPort: 2000,
+      rtcMaxPort: 2020,
+      logLevel: "debug",
+      logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+      dtlsCertificateFile: "/app/ssl/crt.pem",
+      dtlsPrivateKeyFile: "/app/ssl/key.pem",
+    });
 
-  worker.on("died", (error) => {
-    console.error("mediasoup worker died:", error);
-    setTimeout(() => process.exit(1), 2000);
-  });
+    worker.on("died", (error) => {
+      console.error("mediasoup worker died:", error);
+      setTimeout(() => process.exit(1), 2000);
+    });
 
-  return worker;
+    console.log(`Worker created with pid ${worker.pid}`);
+    return worker;
+  } catch (error) {
+    console.error("Worker creation failed:", error);
+    throw error;
+  }
 };
 
 // 연결 디버깅을 위한 미들웨어 추가
