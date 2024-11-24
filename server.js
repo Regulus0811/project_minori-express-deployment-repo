@@ -11,7 +11,6 @@ const io = require("socket.io")(server, {
   cors: {
     origin: "https://minoriedu.com",
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["*"],
     credentials: true,
   },
   transports: ["websocket"],
@@ -20,19 +19,47 @@ const io = require("socket.io")(server, {
   connectTimeout: 30000,
   allowEIO3: true,
   maxHttpBufferSize: 1e8,
-  allowUpgrades: true,
-  allowEIO3: true,
-  cookie: false,
+  wsEngine: "ws",
   perMessageDeflate: {
     threshold: 1024,
     zlibInflateOptions: {
-      chunkSize: 10 * 1024,
+      chunkSize: 16 * 1024,
     },
     zlibDeflateOptions: {
       level: 6,
     },
   },
 });
+
+// WebSocket 연결 상태 모니터링
+io.engine.on("connection_error", (err) => {
+  console.error("Connection error:", {
+    code: err.code,
+    message: err.message,
+    context: err.context,
+    headers: err.req?.headers,
+    url: err.req?.url,
+  });
+});
+
+// mediasoup 워커 설정
+const createWorker = async () => {
+  worker = await mediasoup.createWorker({
+    rtcMinPort: 2000,
+    rtcMaxPort: 2020,
+    logLevel: "debug",
+    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+    dtlsCertificateFile: "/config/ssl/crt.pem",
+    dtlsPrivateKeyFile: "/config/ssl/key.pem",
+  });
+
+  worker.on("died", (error) => {
+    console.error("mediasoup worker died:", error);
+    setTimeout(() => process.exit(1), 2000);
+  });
+
+  return worker;
+};
 
 // 연결 디버깅을 위한 미들웨어 추가
 io.use((socket, next) => {
@@ -137,30 +164,6 @@ let peers = {}; // { socketId1: { roomName1, socket, transports = [id1, id2,] },
 let transports = []; // [ { socketId1, roomName1, transport, consumer }, ... ]
 let producers = []; // [ { socketId1, roomName1, producer, }, ... ]
 let consumers = []; // [ { socketId1, roomName1, consumer, }, ... ]
-
-const createWorker = async () => {
-  worker = await mediasoup.createWorker({
-    rtcMinPort: 2000,
-    rtcMaxPort: 2020,
-    // Log Settings
-    logLevel: "debug",
-    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-    // CPU Core Settings
-    workerSettings: {
-      dtlsCertificateFile: "/config/ssl/crt.pem",
-      dtlsPrivateKeyFile: "/config/ssl/key.pem",
-    },
-  });
-  console.log(`worker pid ${worker.pid}`);
-
-  worker.on("died", (error) => {
-    // This implies something serious happened, so kill the application
-    console.error("mediasoup worker has died");
-    setTimeout(() => process.exit(1), 2000); // exit in 2 seconds
-  });
-
-  return worker;
-};
 
 // We create a Worker as soon as our application starts
 worker = createWorker();
