@@ -9,19 +9,28 @@ const server = require("http").createServer(app);
 const io = require("socket.io")(server, {
   path: "/mediasoup",
   cors: {
-    origin: "*",
+    origin: "https://minoriedu.com",
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["*"],
     credentials: true,
   },
   transports: ["websocket"],
-  pingTimeout: 30000,
-  pingInterval: 10000,
-  connectTimeout: 10000,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 30000,
   allowEIO3: true,
   maxHttpBufferSize: 1e8,
+  allowUpgrades: true,
+  allowEIO3: true,
+  cookie: false,
   perMessageDeflate: {
     threshold: 1024,
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024,
+    },
+    zlibDeflateOptions: {
+      level: 6,
+    },
   },
 });
 
@@ -74,7 +83,11 @@ io.engine.on("initial_headers", (headers, req) => {
   console.log("Socket.IO Initial headers:", {
     url: req.url,
     method: req.method,
-    headers: headers,
+    headers: {
+      ...headers,
+      "x-forwarded-proto": req.headers["x-forwarded-proto"],
+      "x-forwarded-port": req.headers["x-forwarded-port"],
+    },
     timestamp: new Date().toISOString(),
   });
 });
