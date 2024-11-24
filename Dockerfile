@@ -11,7 +11,11 @@ RUN apt-get update && \
     python3-pip \
     build-essential \
     python3-dev \
-    pkg-config
+    pkg-config \
+    openssl
+
+# SSL 디렉토리 생성
+RUN mkdir -p /app/ssl
 
 # Copy package files
 COPY package*.json ./
@@ -24,6 +28,9 @@ COPY . .
 
 # Add healthcheck endpoint for ALB
 COPY healthcheck.js ./
+
+# SSL 인증서 생성
+RUN openssl req -x509 -newkey rsa:2048 -keyout /app/ssl/key.pem -out /app/ssl/crt.pem -days 365 -nodes -subj "/CN=mediasoup"
 
 # Expose the main server port
 EXPOSE 8000
