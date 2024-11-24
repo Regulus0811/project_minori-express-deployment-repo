@@ -12,7 +12,9 @@ RUN apt-get update && \
     build-essential \
     python3-dev \
     pkg-config \
-    openssl
+    openssl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # SSL 디렉토리 생성
 RUN mkdir -p /app/ssl
@@ -21,7 +23,8 @@ RUN mkdir -p /app/ssl
 COPY package*.json ./
 
 # Install Node.js dependencies
-RUN npm install
+RUN npm install --production && \
+    rm -rf /tmp/npm-cache
 
 # Copy the rest of the application code
 COPY . .
